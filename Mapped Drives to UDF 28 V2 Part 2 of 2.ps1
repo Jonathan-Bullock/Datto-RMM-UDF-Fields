@@ -28,7 +28,7 @@ $sids = reg query HKU
                 #Write-Output "Mapped Drives for user: "
                 return $mappedDrives
             } else {
-                #Write-Output "No mapped drives."
+                Write-Output "No mapped drives found."
             }
     } 
 }
