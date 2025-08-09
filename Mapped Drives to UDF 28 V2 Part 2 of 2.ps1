@@ -28,11 +28,12 @@ $sids = reg query HKU
                 #Write-Output "Mapped Drives for user: "
                 return $mappedDrives
             } else {
-                Write-Output "No mapped drives found."
+                #Write-Output "No mapped drives found."
             }
     } 
 }
-
+if($udf28 -eq $null){
+    $udf28 = "No mapped drives found."}
 $udf28 = (Get-MappedDrives) -join ','| Out-String -Width 250
 Set-ItemProperty "HKLM:\Software\CentraStage" -Name "Custom28$env:usrUDF28" -Value $udf28
 $udf28 #write value to output

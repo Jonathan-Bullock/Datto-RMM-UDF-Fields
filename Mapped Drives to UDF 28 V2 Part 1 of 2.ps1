@@ -19,7 +19,7 @@ had to do some fine tunning to make sure correct registry hives were accessed pe
 
 
 # Get list of network drives
-$drives = Get-WmiObject -Class Win32_NetworkConnection | Select-Object -ExpandProperty RemoteName
+$drives = Get-WmiObject -Class Win32_NetworkConnection | Select-Object -ExpandProperty LocalNameRemoteName
 
 # Format the drives list as a string
 $drivesString = ($drives -join ',' | Out-String).Trim()
