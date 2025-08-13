@@ -26,6 +26,7 @@ Written by Jonathan Bullock Last Update: 2025-07-06
 
 #Should add componant varialbe to adjust the random delay depending on the number of devices the job is being run against.
 Start-Sleep -Seconds (Get-Random -Minimum 30 -Maximum 1000) # Wait X seconds before retrying\
+$server
 
 #-------------Run Speed Test-------------
 function Get-NetSpeedUp{
@@ -34,7 +35,7 @@ function Get-NetSpeedUp{
 
     While ($Errors -eq $true) {
         # Get Upload Speeds
-        $output = & cmd /c '.\iperf3.exe -c jolab-iperf.ddns.net -J'
+        $output = & cmd /c '.\iperf3.exe -c $Server -J'
         $results = $output | ConvertFrom-Json
 
         # Check for errors in the output
@@ -58,7 +59,7 @@ function Get-NetSpeedDown{
 
     While ($Errors -eq $true) {
         # Get Download Speeds
-        $output = & cmd /c '.\iperf3.exe -c jolab-iperf.ddns.net -J --reverse'
+        $output = & cmd /c '.\iperf3.exe -c $Server -J --reverse'
         $results = $output | ConvertFrom-Json
 
         # Check for errors in the output
