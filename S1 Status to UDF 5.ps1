@@ -1,6 +1,6 @@
 ﻿#find current version Config File
 if(!(test-path "C:\Program Files\SentinelOne\")){
-    Write-error "C:\Program Files\SentinelOne\ doesn't existing. Exiting early..."
+    Write-error "C:\Program Files\SentinelOne\ doesn't exist. Exiting early..."
     exit 1}
 
 
@@ -17,7 +17,7 @@ $udf = "VSS Snapshots: " + $S1_vssSnapshots + ", Site ID: " + $S1_Site + ", MGMT
 $udf
 
 #Write to registry for Datto RMM UDF
-Set-ItemProperty "HKLM:\Software\CentraStage" -Name "Custom5$env:usrUDF5" -Value $udf5
+Set-ItemProperty "HKLM:\Software\CentraStage" -Name "Custom5$env:usrUDF5" -Value $udf
 
 #used for Performance Tracking
 Get-Date
