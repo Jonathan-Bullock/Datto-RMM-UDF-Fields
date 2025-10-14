@@ -16,3 +16,9 @@ if ($UacStatus -eq 1) {
  	exit 1
 }
 $udf15
+
+<# Testing method for updating this setting using registry entry
+	$UacStatus = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System").EnableLUA
+	Set-ItemProperty "HKLM:\Software\CentraStage" -Name "Custom15$env:usrUDF15" -Value $udf15
+	$udf15
+#>
