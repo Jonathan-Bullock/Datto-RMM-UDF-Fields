@@ -1,0 +1,46 @@
+<#-----------Update History
+V4 writes a warning to indicate which moduals aren't the expected Values
+V5 Excludes servers from Tamper Protection and Trouble Shooting Mode will not be evaluated.
+
+#>
+$start = Get-Date
+$MPComputerStatus = Get-MpComputerStatus
+$score = 0 # initialize score to 0. For each indicator that is a favorable value the score is increased by 1 and then divided by total number of items to give a percentage.
+#Things that should evaluate as true
+if($MPComputerStatus.AMServiceEnabled){$score += 1} else{WRITE-warning "AMServiceEnabled is not functioning fully"}
+if($MPComputerStatus.AntispywareEnabled){$score += 1} else{WRITE-warning "Antispyware is disabled"}
+if($MPComputerStatus.AntivirusEnabled){$score += 1} else{WRITE-warning "Antivirus Module is disabled"}
+if($MPComputerStatus.BehaviorMonitorEnabled){$score += 1} else{WRITE-warning "Behavioral Monitoring is disabled"}
+if($MPComputerStatus.IoavProtectionEnabled){$score += 1} else{WRITE-warning "IOAV protection is disabled"}
+if($MPComputerStatus.NISEnabled){$score += 1} else{WRITE-warning "Network inspection is disabled"}
+if($MPComputerStatus.OnAccessProtectionEnabled){$score += 1} else{WRITE-warning "On Access Protection is disabled"}
+if($MPComputerStatus.RealTimeProtectionEnabled){$score += 1} else{WRITE-warning "Real Time protection is disabled"}
+#things that should evaluate as false
+if(!($MPComputerStatus.DefenderSignaturesOutOfDate)){$score += 1} else{WRITE-warning "Defender Signatures are out of date"}
+if(!($MPComputerStatus.FullScanOverdue)){$score += 1} else{WRITE-warning "A full scan is overdue according to device security policies"}
+if(!($MPComputerStatus.FullScanRequired)){$score += 1} else{WRITE-warning "Full scan is marked as required on this device"}
+if(!($MPComputerStatus.QuickScanOverdue)){$score += 1} else{WRITE-warning "Quick Scan is overdue per device policies"}
+if(!($MPComputerStatus.RebootRequired)){$score += 1} else{WRITE-warning "Reboot is required to restore full functionality"}
+#things that should report as 'Disabled'
+if($MPComputerStatus.DeviceControlState -eq "Disabled"){$score += 1} else{WRITE-warning "Device Control state has been changed from the default and is now enabled"}#believe that this is for USB devices and the default value is disabled. If this changes it's an indication that something has been changed
+#things that should be Normal
+if($MPComputerStatus.AMRunningMode -eq "Normal"){$score += 1} else{WRITE-warning "Running mode is not normal for AV"}
+$MPComputerStatus #Show raw data
+
+    $isServer = (Get-CimInstance -ClassName Win32_OperatingSystem).Name.ToString().ToLower() -match "Server"
+    if($isServer){$ExpectedTotalScore = 15 #Max possible total score
+    Write-Host "This device is a server so Tamper Protection and Trouble Shooting Mode will not be evaluated."}
+    else {$ExpectedTotalScore = 17 #Max possible total score
+        if($MPComputerStatus.TroubleShootingMode -eq "Disabled"){$score += 1} else{WRITE-warning "TroubleShootingMode is not showing as disabled"}
+        if($MPComputerStatus.IsTamperProtected){$score += 1} else{WRITE-warning "Tamper Protection is disabled"}
+        }
+
+
+$Mode = $MPComputerStatus.AMRunningMode
+$udf27 = "$Mode, score: $score of $ExpectedTotalScore ($([math]::Round($score/$ExpectedTotalScore*100, 0))%)" #Starts with running mode to confirm that the service status isn't disabled or in passive mode
+
+Set-ItemProperty "HKLM:\Software\CentraStage" -Name "Custom27$env:usrUDF27" -Value $udf27
+$udf27
+$end = Get-Date
+$Time = ($end-$start).Milliseconds
+Write-Host "Componant run time: $Time Milliseconds" #The time between start and end of script
