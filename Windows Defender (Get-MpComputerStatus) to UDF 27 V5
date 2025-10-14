@@ -1,5 +1,7 @@
 <#-----------Update History
 V4 writes a warning to indicate which moduals aren't the expected Values
+There are too many indicators for this to work using a single value so a score is calculated instead and returned.
+Hope to eventually add error output in the Else scenario 
 V5 Excludes servers from Tamper Protection and Trouble Shooting Mode will not be evaluated.
 
 #>
