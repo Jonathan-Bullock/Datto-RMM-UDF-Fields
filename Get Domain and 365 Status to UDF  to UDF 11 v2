@@ -1,0 +1,127 @@
+<#
+Datto RMM UDF (<= 250 chars): device identity state.
+
+Signals:
+  - Local AD domain joined: Win32_ComputerSystem.PartOfDomain
+  - Entra joined: dsregcmd => AzureAdJoined : YES
+  - Entra registered: dsregcmd => AzureAdRegistered : YES
+
+State precedence:
+  Hybrid > LocalAD > Entra > Registered > Workgroup
+
+Implementation notes:
+  - dsregcmd returns TEXT; we parse lines.
+  - We defensively coerce dsregcmd output to a string[] (may be empty if dsregcmd fails).
+  - We only output the resolved state and relevant names (no negative states).
+  - Output hard-limited to 250 chars.
+    ----------------------------Updated 3/18/2026----------------------------
+  Added check for schedulaed tasks that are removed to added if device is MDM Joined
+  -Jonathan Bullock
+#>
+
+function Get-DsregValue {
+    param(
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [string[]]$Text,
+
+        [Parameter(Mandatory)]
+        [string]$Key
+    )
+
+    if (-not $Text -or $Text.Count -eq 0) { return $null }
+
+    $line = $Text |
+        Where-Object { $_ -match "^\s*$([regex]::Escape($Key))\s*:\s*" } |
+        Select-Object -First 1
+
+    if (-not $line) { return $null }
+    ($line -split ":\s*", 2)[1].Trim()
+}
+
+function Add-PartWithinLimit {
+    param(
+        [AllowEmptyCollection()]
+        [System.Collections.Generic.List[string]]$Parts,
+
+        [Parameter(Mandatory)]
+        [string]$Part,
+
+        [int]$MaxLen = 250,
+        [string]$Sep = " | "
+    )
+
+    $current = if ($Parts -and $Parts.Count -gt 0) { ($Parts -join $Sep) } else { "" }
+    $candidate = if ([string]::IsNullOrEmpty($current)) { $Part } else { $current + $Sep + $Part }
+
+    if ($candidate.Length -le $MaxLen) {
+        [void]$Parts.Add($Part)
+        return $true
+    }
+    return $false
+}
+
+# --- Local AD vs Workgroup signal ---
+$cs = Get-CimInstance Win32_ComputerSystem
+$localDomainJoined = [bool]$cs.PartOfDomain
+$nameFromCS        = $cs.Domain  # AD domain if joined; otherwise workgroup name
+
+# --- dsregcmd output as string[] (robust) ---
+# Out-String -Stream forces an array of lines; if dsregcmd fails, we get @()
+try {
+    $dsText = @(& dsregcmd /status 2>$null | Out-String -Stream)
+} catch {
+    $dsText = @()
+}
+
+#check Joined Typed
+$entraJoined     = (Get-DsregValue -Text $dsText -Key "AzureAdJoined") -eq "YES"
+$entraRegistered = (Get-DsregValue -Text $dsText -Key "AzureAdRegistered") -eq "YES"
+$tenantName      =  Get-DsregValue -Text $dsText -Key "TenantName"
+
+# --- Decide a single state (precedence) ---
+if ($localDomainJoined -and $entraJoined) { $joinState = "Hybrid" }
+elseif ($localDomainJoined)              { $joinState = "LocalAD" }
+elseif ($entraJoined)                    { $joinState = "Entra" }
+elseif ($entraRegistered)                { $joinState = "Registered" }
+else                                     { $joinState = "Workgroup" }
+
+# --- Build output within 250 chars ---
+$parts = [System.Collections.Generic.List[string]]::new()
+$max = 250
+$sep = ", "
+
+Add-PartWithinLimit -Parts $parts -Part "State:$joinState" -MaxLen $max -Sep $sep | Out-Null
+
+switch ($joinState) {
+    "Hybrid" {
+        if ($nameFromCS) { Add-PartWithinLimit -Parts $parts -Part "Domain:$nameFromCS" -MaxLen $max -Sep $sep | Out-Null }
+        if ($tenantName) { Add-PartWithinLimit -Parts $parts -Part "Tenant:$tenantName" -MaxLen $max -Sep $sep | Out-Null }
+    }
+    "LocalAD" {
+        if ($nameFromCS) { Add-PartWithinLimit -Parts $parts -Part "Domain:$nameFromCS" -MaxLen $max -Sep $sep | Out-Null }
+    }
+    "Entra" {
+        if ($tenantName) { Add-PartWithinLimit -Parts $parts -Part "Tenant:$tenantName" -MaxLen $max -Sep $sep | Out-Null }
+    }
+    "Registered" {
+        if ($tenantName) { Add-PartWithinLimit -Parts $parts -Part "Tenant:$tenantName" -MaxLen $max -Sep $sep | Out-Null }
+    }
+    "Workgroup" {
+        if ($nameFromCS) { Add-PartWithinLimit -Parts $parts -Part "Tenant:$nameFromCS" -MaxLen $max -Sep $sep | Out-Null }
+    }
+}
+
+#If MDM Managed Prepend String
+$MDMJobs = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskPath -match '^\\Microsoft\\Windows\\EnterpriseMgmt\\[^\\]+\\$' }
+if($MDMJobs -NE $null){ Add-PartWithinLimit -Parts $parts -Part "IntuneMDM:True" -MaxLen $max -Sep $sep | Out-Null }
+
+Add-PartWithinLimit -Parts $parts -Part ("Updated:" + (Get-Date -Format g)) -MaxLen $max -Sep $sep | Out-Null
+
+
+$udf = ($parts -join $sep)
+if ($udf.Length -gt 250) { $udf = $udf.Substring(0, 250) } #Trim String to 250 Charecters for Datto RMM Max UDF Length
+
+$udf11 = $udf
+Set-ItemProperty "HKLM:\Software\CentraStage" -Name "Custom11$env:usrUDF11" -Value $udf11
+$udf11
