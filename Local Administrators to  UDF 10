@@ -1,0 +1,3 @@
+$udf10 = ((net localgroup administrators)[6..13] -join ','| Out-String -Width 250)
+Set-ItemProperty "HKLM:\Software\CentraStage" -Name "Custom10$env:usrUDF10" -Value $udf10
+$udf10
