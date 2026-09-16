@@ -1,0 +1,33 @@
+<#Get number of system(s) restore points and update UDF 12
+If there's more than 25% available space enable and if there's less than 12 disable.
+If there are no restore points and restore points have been enabled create one#>
+
+if ((Get-CimInstance Win32_OperatingSystem -Property name).name -notlike "*Server*") {
+    #Get OS Disk percentage of free space and round off decimal places
+    $Disk = Get-WmiObject -class win32_logicaldisk | Where-Object -Property VolumeName -Match "Windows"
+    sleep 10 #wMI objexts can take a while to query so this is an added delay
+    
+    #for older systems that don't use UEFI I've found that the C: volume is not marked as a windows boot partition. Assuming this is the C volume if this is the case.
+    if ($Disk -eq $null) {$Disk = Get-WmiObject -class win32_logicaldisk | Where-Object -Property DeviceID -Match "C:"}
+    
+    $Free = [math]::Round($Disk.FreeSpace/$Disk.Size*100)
+    #enable at 25 percent Free or Disable at 12 since restore points can take up space
+    if ($Free -lt 12) {Disable-ComputerRestore -Drive $Disk.DeviceID}
+    if ($Free -gt 25) {Enable-ComputerRestore -Drive $Disk.DeviceID
+
+
+        #write the number of available system restore points
+        $udf12 = ((Get-ComputerRestorePoint | measure).Count)
+        if ($udf12 -eq 0) {$udf12 = "No Restore Points. Creating now..."
+            Checkpoint-Computer -Description 'TTS initial Check Point' -RestorePointType MODIFY_SETTINGS}
+
+        $udf12 = $udf12 | Out-String -Width 250
+        Set-ItemProperty "HKLM:\Software\CentraStage" -Name "Custom12$env:usrUDF12" -Value $udf12
+    }
+}
+else {Set-ItemProperty "HKLM:\Software\CentraStage" -Name "Custom12$env:usrUDF12" -Value "SERVER"}
+
+
+$udf12 #number of restore points if any
+$Free #percentage of free disk space
+$Disk #disk info. should be windows boot partition. If there is no known boot partition should return c:
